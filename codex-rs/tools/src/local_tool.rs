@@ -5,15 +5,25 @@ use serde_json::Value;
 use serde_json::json;
 use std::collections::BTreeMap;
 
+/// Controls which Windows shell syntax the tool descriptions document.
+/// Has no effect on non-Windows platforms (descriptions are always POSIX-style there).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WindowsShellKind {
+    PowerShell,
+    GitBash,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CommandToolOptions {
     pub allow_login_shell: bool,
     pub exec_permission_approvals_enabled: bool,
+    pub windows_shell_kind: WindowsShellKind,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ShellToolOptions {
     pub exec_permission_approvals_enabled: bool,
+    pub windows_shell_kind: WindowsShellKind,
 }
 
 pub fn create_exec_command_tool(options: CommandToolOptions) -> ToolSpec {
@@ -87,7 +97,7 @@ pub fn create_exec_command_tool(options: CommandToolOptions) -> ToolSpec {
         description: if cfg!(windows) {
             format!(
                 "Runs a command in a PTY, returning output or a session ID for ongoing interaction.\n\n{}",
-                windows_destructive_filesystem_guidance()
+                windows_destructive_filesystem_guidance(options.windows_shell_kind)
             )
         } else {
             "Runs a command in a PTY, returning output or a session ID for ongoing interaction."
@@ -180,8 +190,9 @@ pub fn create_shell_tool(options: ShellToolOptions) -> ToolSpec {
     ));
 
     let description = if cfg!(windows) {
-        format!(
-            r#"Runs a Powershell command (Windows) and returns its output. Arguments to `shell` will be passed to CreateProcessW(). Most commands should be prefixed with ["powershell.exe", "-Command"].
+        match options.windows_shell_kind {
+            WindowsShellKind::PowerShell => format!(
+                r#"Runs a Powershell command (Windows) and returns its output. Arguments to `shell` will be passed to CreateProcessW(). Most commands should be prefixed with ["powershell.exe", "-Command"].
 
 Examples of valid command strings:
 
@@ -193,8 +204,24 @@ Examples of valid command strings:
 - running an inline Python script: ["powershell.exe", "-Command", "@'\\nprint('Hello, world!')\\n'@ | python -"]
 
 {}"#,
-            windows_destructive_filesystem_guidance()
-        )
+                windows_destructive_filesystem_guidance(WindowsShellKind::PowerShell)
+            ),
+            WindowsShellKind::GitBash => format!(
+                r#"Runs a bash command (Git Bash on Windows) and returns its output. Arguments to `shell` will be passed to CreateProcessW(). Most commands should be prefixed with ["bash", "-c"].
+
+Examples of valid command strings:
+
+- ls -a (show hidden): ["bash", "-c", "ls -a"]
+- recursive find by name: ["bash", "-c", "find . -name '*.py'"]
+- recursive grep: ["bash", "-c", "grep -r 'TODO' ."]
+- ps aux | grep python: ["bash", "-c", "ps aux | grep python"]
+- setting an env var: ["bash", "-c", "export FOO=bar; echo $FOO"]
+- running an inline Python script: ["bash", "-c", "python - <<'EOF'\nprint('Hello, world!')\nEOF"]
+
+{}"#,
+                windows_destructive_filesystem_guidance(WindowsShellKind::GitBash)
+            ),
+        }
     } else {
         r#"Runs a shell command and returns its output.
 - The arguments to `shell` will be passed to execvp(). Most terminal commands should be prefixed with ["bash", "-lc"].
@@ -255,8 +282,9 @@ pub fn create_shell_command_tool(options: CommandToolOptions) -> ToolSpec {
     ));
 
     let description = if cfg!(windows) {
-        format!(
-            r#"Runs a Powershell command (Windows) and returns its output.
+        match options.windows_shell_kind {
+            WindowsShellKind::PowerShell => format!(
+                r#"Runs a Powershell command (Windows) and returns its output.
 
 Examples of valid command strings:
 
@@ -268,8 +296,24 @@ Examples of valid command strings:
 - running an inline Python script: "@'\\nprint('Hello, world!')\\n'@ | python -"
 
 {}"#,
-            windows_destructive_filesystem_guidance()
-        )
+                windows_destructive_filesystem_guidance(WindowsShellKind::PowerShell)
+            ),
+            WindowsShellKind::GitBash => format!(
+                r#"Runs a bash command (Git Bash on Windows) and returns its output.
+- Always set the `workdir` param when using the shell_command function. Do not use `cd` unless absolutely necessary.
+
+Examples of valid command strings:
+
+- ls -a (show hidden): "ls -a"
+- recursive find by name: "find . -name '*.py'"
+- recursive grep: "grep -r 'TODO' ."
+- ps aux | grep python: "ps aux | grep python"
+- setting an env var: "export FOO=bar; echo $FOO"
+
+{}"#,
+                windows_destructive_filesystem_guidance(WindowsShellKind::GitBash)
+            ),
+        }
     } else {
         r#"Runs a shell command and returns its output.
 - Always set the `workdir` param when using the shell_command function. Do not use `cd` unless absolutely necessary."#
@@ -452,10 +496,20 @@ fn file_system_permissions_schema() -> JsonSchema {
     }
 }
 
-fn windows_destructive_filesystem_guidance() -> &'static str {
-    r#"Windows safety rules:
+fn windows_destructive_filesystem_guidance(shell_kind: WindowsShellKind) -> &'static str {
+    match shell_kind {
+        WindowsShellKind::PowerShell => {
+            r#"Windows safety rules:
 - Do not compose destructive filesystem commands across shells. Do not enumerate paths in PowerShell and then pass them to `cmd /c`, batch builtins, or another shell for deletion or moving. Use one shell end-to-end, prefer native PowerShell cmdlets such as `Remove-Item` / `Move-Item` with `-LiteralPath`, and avoid string-built shell commands for file operations.
 - Before any recursive delete or move on Windows, verify the resolved absolute target paths stay within the intended workspace or explicitly named target directory. Never issue a recursive delete or move against a computed path if the final target has not been checked."#
+        }
+        WindowsShellKind::GitBash => {
+            r#"Windows safety rules (Git Bash):
+- Use bash commands end-to-end. Do not mix bash path enumeration with PowerShell or cmd for deletion or moving.
+- Prefer `rm -rf` with explicit absolute paths. Verify resolved target paths before any recursive delete or move.
+- Git Bash uses POSIX-style paths (e.g. /c/Users/...); be explicit when calling Windows-native tools from bash."#
+        }
+    }
 }
 
 #[cfg(test)]

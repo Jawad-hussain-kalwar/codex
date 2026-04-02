@@ -38,6 +38,13 @@ pub enum WindowsSandboxModeToml {
     Unelevated,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum WindowsAgentShellToml {
+    PowerShell,
+    GitBash,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct WindowsToml {
@@ -45,6 +52,9 @@ pub struct WindowsToml {
     /// Defaults to `true`. Set to `false` to launch the final sandboxed child
     /// process on `Winsta0\\Default` instead of a private desktop.
     pub sandbox_private_desktop: Option<bool>,
+    /// Which shell the agent uses on Windows. Defaults to `powershell`.
+    /// Set to `git-bash` to use Git Bash (requires Git for Windows to be installed).
+    pub agent_shell: Option<WindowsAgentShellToml>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

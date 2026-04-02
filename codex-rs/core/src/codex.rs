@@ -177,6 +177,7 @@ use crate::config::StartedNetworkProxy;
 use crate::config::resolve_web_search_mode_for_turn;
 use crate::config::types::McpServerConfig;
 use crate::config::types::ShellEnvironmentPolicy;
+use crate::config::types::WindowsAgentShellToml;
 use crate::context_manager::ContextManager;
 use crate::context_manager::TotalTokenUsageBreakdown;
 use crate::environment_context::EnvironmentContext;
@@ -1386,6 +1387,16 @@ impl Session {
         let auth_manager_for_context = auth_manager;
         let provider_for_context = provider;
         let session_telemetry_for_context = session_telemetry;
+        let windows_shell_kind = if cfg!(windows)
+            && matches!(
+                per_turn_config.permissions.windows_agent_shell,
+                Some(WindowsAgentShellToml::GitBash)
+            )
+        {
+            codex_tools::WindowsShellKind::GitBash
+        } else {
+            codex_tools::WindowsShellKind::PowerShell
+        };
         let tools_config = ToolsConfig::new(&ToolsConfigParams {
             model_info: &model_info,
             available_models: &models_manager.try_list_models().unwrap_or_default(),
@@ -1402,6 +1413,7 @@ impl Session {
         )
         .with_web_search_config(per_turn_config.web_search_config.clone())
         .with_allow_login_shell(per_turn_config.permissions.allow_login_shell)
+        .with_windows_shell_kind(windows_shell_kind)
         .with_agent_roles(per_turn_config.agent_roles.clone());
 
         let cwd = session_configuration.cwd.clone();
@@ -1723,6 +1735,11 @@ impl Session {
         );
 
         let use_zsh_fork_shell = config.features.enabled(Feature::ShellZshFork);
+        let use_windows_git_bash = cfg!(windows)
+            && matches!(
+                config.permissions.windows_agent_shell,
+                Some(WindowsAgentShellToml::GitBash)
+            );
         let mut default_shell = if let Some(user_shell_override) =
             session_configuration.user_shell_override.clone()
         {
@@ -1738,6 +1755,13 @@ impl Session {
                 anyhow::anyhow!(
                     "zsh fork feature enabled, but zsh_path `{}` is not usable; set `zsh_path` to a valid zsh executable",
                     zsh_path.display()
+                )
+            })?
+        } else if use_windows_git_bash {
+            shell::get_shell(shell::ShellType::Bash, /*path*/ None).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "windows.agent_shell is set to \"git-bash\", but bash could not be found; \
+                     install Git for Windows or set `windows.agent_shell` to \"powershell\""
                 )
             })?
         } else {

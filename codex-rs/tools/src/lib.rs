@@ -45,6 +45,7 @@ pub use json_schema::JsonSchema;
 pub use json_schema::parse_tool_input_schema;
 pub use local_tool::CommandToolOptions;
 pub use local_tool::ShellToolOptions;
+pub use local_tool::WindowsShellKind;
 pub use local_tool::create_exec_command_tool;
 pub use local_tool::create_request_permissions_tool;
 pub use local_tool::create_shell_command_tool;

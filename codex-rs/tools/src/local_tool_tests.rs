@@ -3,13 +3,17 @@ use pretty_assertions::assert_eq;
 use std::collections::BTreeMap;
 
 fn windows_shell_safety_description() -> String {
-    format!("\n\n{}", windows_destructive_filesystem_guidance())
+    format!(
+        "\n\n{}",
+        windows_destructive_filesystem_guidance(WindowsShellKind::PowerShell)
+    )
 }
 
 #[test]
 fn shell_tool_matches_expected_spec() {
     let tool = create_shell_tool(ShellToolOptions {
         exec_permission_approvals_enabled: false,
+        windows_shell_kind: WindowsShellKind::PowerShell,
     });
 
     let description = if cfg!(windows) {
@@ -110,6 +114,7 @@ fn exec_command_tool_matches_expected_spec() {
     let tool = create_exec_command_tool(CommandToolOptions {
         allow_login_shell: true,
         exec_permission_approvals_enabled: false,
+        windows_shell_kind: WindowsShellKind::PowerShell,
     });
 
     let description = if cfg!(windows) {
@@ -261,6 +266,7 @@ fn write_stdin_tool_matches_expected_spec() {
 fn shell_tool_with_request_permission_includes_additional_permissions() {
     let tool = create_shell_tool(ShellToolOptions {
         exec_permission_approvals_enabled: true,
+        windows_shell_kind: WindowsShellKind::PowerShell,
     });
 
     let mut properties = BTreeMap::from([
@@ -302,7 +308,7 @@ Examples of valid command strings:
 - running an inline Python script: ["powershell.exe", "-Command", "@'\\nprint('Hello, world!')\\n'@ | python -"]
 
 {}"#,
-            windows_destructive_filesystem_guidance()
+            windows_destructive_filesystem_guidance(WindowsShellKind::PowerShell)
         )
     } else {
         r#"Runs a shell command and returns its output.
@@ -368,6 +374,7 @@ fn shell_command_tool_matches_expected_spec() {
     let tool = create_shell_command_tool(CommandToolOptions {
         allow_login_shell: true,
         exec_permission_approvals_enabled: false,
+        windows_shell_kind: WindowsShellKind::PowerShell,
     });
 
     let description = if cfg!(windows) {
@@ -438,5 +445,78 @@ Examples of valid command strings:
             },
             output_schema: None,
         })
+    );
+}
+
+#[cfg(windows)]
+#[test]
+fn shell_tool_git_bash_description() {
+    let tool = create_shell_tool(ShellToolOptions {
+        exec_permission_approvals_enabled: false,
+        windows_shell_kind: WindowsShellKind::GitBash,
+    });
+
+    let ToolSpec::Function(f) = tool else {
+        panic!("expected Function spec");
+    };
+    assert!(
+        f.description.contains(r#"["bash", "-c","#),
+        "GitBash shell tool description should use bash -c syntax, got: {}",
+        f.description
+    );
+    assert!(
+        !f.description.contains("powershell.exe"),
+        "GitBash shell tool description should not mention powershell.exe"
+    );
+    assert!(
+        f.description.contains("Git Bash"),
+        "GitBash shell tool description should mention Git Bash"
+    );
+}
+
+#[cfg(windows)]
+#[test]
+fn shell_tool_with_request_permission_git_bash_description() {
+    let tool = create_shell_tool(ShellToolOptions {
+        exec_permission_approvals_enabled: true,
+        windows_shell_kind: WindowsShellKind::GitBash,
+    });
+
+    let ToolSpec::Function(f) = tool else {
+        panic!("expected Function spec");
+    };
+    assert!(
+        f.description.contains(r#"["bash", "-c","#),
+        "GitBash shell tool (with approval) description should use bash -c syntax"
+    );
+    assert!(
+        !f.description.contains("powershell.exe"),
+        "GitBash shell tool (with approval) description should not mention powershell.exe"
+    );
+}
+
+#[cfg(windows)]
+#[test]
+fn shell_command_tool_git_bash_description() {
+    let tool = create_shell_command_tool(CommandToolOptions {
+        allow_login_shell: true,
+        exec_permission_approvals_enabled: false,
+        windows_shell_kind: WindowsShellKind::GitBash,
+    });
+
+    let ToolSpec::Function(f) = tool else {
+        panic!("expected Function spec");
+    };
+    assert!(
+        f.description.contains("bash"),
+        "GitBash shell_command tool description should mention bash"
+    );
+    assert!(
+        !f.description.contains("Powershell"),
+        "GitBash shell_command tool description should not mention Powershell"
+    );
+    assert!(
+        f.description.contains("ls -a"),
+        "GitBash shell_command tool description should use POSIX examples"
     );
 }
