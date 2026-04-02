@@ -154,6 +154,7 @@ fn resolve_windows_sandbox_private_desktop_prefers_profile_windows() {
         windows: Some(WindowsToml {
             sandbox: Some(WindowsSandboxModeToml::Unelevated),
             sandbox_private_desktop: Some(false),
+            agent_shell: None,
         }),
         ..Default::default()
     };
@@ -161,6 +162,7 @@ fn resolve_windows_sandbox_private_desktop_prefers_profile_windows() {
         windows: Some(WindowsToml {
             sandbox: Some(WindowsSandboxModeToml::Elevated),
             sandbox_private_desktop: Some(true),
+            agent_shell: None,
         }),
         ..Default::default()
     };

@@ -208,7 +208,16 @@ fn get_zsh_shell(path: Option<&PathBuf>) -> Option<Shell> {
 }
 
 fn get_bash_shell(path: Option<&PathBuf>) -> Option<Shell> {
-    let shell_path = get_shell_path(ShellType::Bash, path, "bash", vec!["/bin/bash"]);
+    let fallback_paths: Vec<&str> = if cfg!(windows) {
+        vec![
+            "C:\\Program Files\\Git\\bin\\bash.exe",
+            "C:\\Program Files\\Git\\usr\\bin\\bash.exe",
+            "C:\\Program Files (x86)\\Git\\bin\\bash.exe",
+        ]
+    } else {
+        vec!["/bin/bash"]
+    };
+    let shell_path = get_shell_path(ShellType::Bash, path, "bash", fallback_paths);
 
     shell_path.map(|shell_path| Shell {
         shell_type: ShellType::Bash,

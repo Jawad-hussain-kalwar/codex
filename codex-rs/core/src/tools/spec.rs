@@ -171,6 +171,7 @@ pub(crate) struct ToolsConfig {
     pub experimental_supported_tools: Vec<String>,
     pub agent_jobs_tools: bool,
     pub agent_jobs_worker_tools: bool,
+    pub windows_shell_kind: codex_tools::WindowsShellKind,
 }
 
 pub(crate) struct ToolsConfigParams<'a> {
@@ -305,7 +306,13 @@ impl ToolsConfig {
             experimental_supported_tools: model_info.experimental_supported_tools.clone(),
             agent_jobs_tools: include_agent_jobs,
             agent_jobs_worker_tools,
+            windows_shell_kind: codex_tools::WindowsShellKind::PowerShell,
         }
+    }
+
+    pub fn with_windows_shell_kind(mut self, kind: codex_tools::WindowsShellKind) -> Self {
+        self.windows_shell_kind = kind;
+        self
     }
 
     pub fn with_agent_roles(mut self, agent_roles: BTreeMap<String, AgentRoleConfig>) -> Self {
@@ -499,6 +506,7 @@ pub(crate) fn build_specs_with_discoverable_tools(
                 &mut builder,
                 create_shell_tool(ShellToolOptions {
                     exec_permission_approvals_enabled,
+                    windows_shell_kind: config.windows_shell_kind,
                 }),
                 /*supports_parallel_tool_calls*/ true,
                 config.code_mode_enabled,
@@ -518,6 +526,7 @@ pub(crate) fn build_specs_with_discoverable_tools(
                 create_exec_command_tool(CommandToolOptions {
                     allow_login_shell: config.allow_login_shell,
                     exec_permission_approvals_enabled,
+                    windows_shell_kind: config.windows_shell_kind,
                 }),
                 /*supports_parallel_tool_calls*/ true,
                 config.code_mode_enabled,
@@ -540,6 +549,7 @@ pub(crate) fn build_specs_with_discoverable_tools(
                 create_shell_command_tool(CommandToolOptions {
                     allow_login_shell: config.allow_login_shell,
                     exec_permission_approvals_enabled,
+                    windows_shell_kind: config.windows_shell_kind,
                 }),
                 /*supports_parallel_tool_calls*/ true,
                 config.code_mode_enabled,

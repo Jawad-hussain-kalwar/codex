@@ -2,6 +2,7 @@ use crate::config::Config;
 use crate::config::ConfigToml;
 use crate::config::edit::ConfigEditsBuilder;
 use crate::config::profile::ConfigProfile;
+use crate::config::types::WindowsAgentShellToml;
 use crate::config::types::WindowsSandboxModeToml;
 use crate::default_client::originator;
 use crate::protocol::SandboxPolicy;
@@ -73,6 +74,17 @@ pub fn resolve_windows_sandbox_mode(
         .and_then(|windows| windows.sandbox)
         .or_else(|| cfg.windows.as_ref().and_then(|windows| windows.sandbox))
         .or_else(|| legacy_windows_sandbox_mode(cfg.features.as_ref()))
+}
+
+pub fn resolve_windows_agent_shell(
+    cfg: &ConfigToml,
+    profile: &ConfigProfile,
+) -> Option<WindowsAgentShellToml> {
+    profile
+        .windows
+        .as_ref()
+        .and_then(|w| w.agent_shell)
+        .or_else(|| cfg.windows.as_ref().and_then(|w| w.agent_shell))
 }
 
 pub fn resolve_windows_sandbox_private_desktop(cfg: &ConfigToml, profile: &ConfigProfile) -> bool {

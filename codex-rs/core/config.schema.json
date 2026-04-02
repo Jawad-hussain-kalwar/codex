@@ -1862,6 +1862,13 @@
       },
       "type": "object"
     },
+    "WindowsAgentShellToml": {
+      "enum": [
+        "power-shell",
+        "git-bash"
+      ],
+      "type": "string"
+    },
     "WindowsSandboxModeToml": {
       "enum": [
         "elevated",
@@ -1872,6 +1879,14 @@
     "WindowsToml": {
       "additionalProperties": false,
       "properties": {
+        "agent_shell": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/WindowsAgentShellToml"
+            }
+          ],
+          "description": "Which shell the agent uses on Windows. Defaults to `powershell`. Set to `git-bash` to use Git Bash (requires Git for Windows to be installed)."
+        },
         "sandbox": {
           "$ref": "#/definitions/WindowsSandboxModeToml"
         },

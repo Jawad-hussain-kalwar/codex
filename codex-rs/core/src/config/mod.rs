@@ -25,6 +25,7 @@ use crate::config::types::ToolSuggestConfig;
 use crate::config::types::ToolSuggestDiscoverable;
 use crate::config::types::Tui;
 use crate::config::types::UriBasedFileOpener;
+use crate::config::types::WindowsAgentShellToml;
 use crate::config::types::WindowsSandboxModeToml;
 use crate::config::types::WindowsToml;
 use crate::config_loader::CloudRequirementsLoader;
@@ -56,6 +57,7 @@ use crate::protocol::SandboxPolicy;
 use crate::unified_exec::DEFAULT_MAX_BACKGROUND_TERMINAL_TIMEOUT_MS;
 use crate::unified_exec::MIN_EMPTY_YIELD_TIME_MS;
 use crate::windows_sandbox::WindowsSandboxLevelExt;
+use crate::windows_sandbox::resolve_windows_agent_shell;
 use crate::windows_sandbox::resolve_windows_sandbox_mode;
 use crate::windows_sandbox::resolve_windows_sandbox_private_desktop;
 use codex_app_server_protocol::Tools;
@@ -210,6 +212,8 @@ pub struct Permissions {
     pub windows_sandbox_mode: Option<WindowsSandboxModeToml>,
     /// Whether the final Windows sandboxed child should run on a private desktop.
     pub windows_sandbox_private_desktop: bool,
+    /// Preferred agent shell on Windows. `None` means default (PowerShell).
+    pub windows_agent_shell: Option<WindowsAgentShellToml>,
 }
 
 /// Application configuration loaded from disk and merged with overrides.
@@ -458,6 +462,10 @@ pub struct Config {
 
     /// Optional absolute path to patched zsh used by zsh-exec-bridge-backed shell execution.
     pub zsh_path: Option<PathBuf>,
+
+    /// Resolved path of Git Bash on Windows, populated when `windows.agent_shell = "git-bash"`.
+    /// Used to register the binary as a readable root in the sandbox policy.
+    pub bash_path: Option<PathBuf>,
 
     /// Value to use for `reasoning.effort` when making a request using the
     /// Responses API.
@@ -2080,6 +2088,7 @@ impl Config {
         let windows_sandbox_mode = resolve_windows_sandbox_mode(&cfg, &config_profile);
         let windows_sandbox_private_desktop =
             resolve_windows_sandbox_private_desktop(&cfg, &config_profile);
+        let windows_agent_shell = resolve_windows_agent_shell(&cfg, &config_profile);
         let resolved_cwd = AbsolutePathBuf::try_from(normalize_for_native_workdir({
             use std::env;
 
@@ -2461,6 +2470,15 @@ impl Config {
             .or(config_profile.zsh_path.map(Into::into))
             .or(cfg.zsh_path.map(Into::into));
 
+        let bash_path: Option<PathBuf> = if cfg!(windows)
+            && matches!(windows_agent_shell, Some(WindowsAgentShellToml::GitBash))
+        {
+            crate::shell::get_shell(crate::shell::ShellType::Bash, None)
+                .map(|s| s.shell_path.clone())
+        } else {
+            None
+        };
+
         let review_model = override_review_model.or(cfg.review_model);
 
         let check_for_update_on_startup = cfg.check_for_update_on_startup.unwrap_or(true);
@@ -2539,6 +2557,7 @@ impl Config {
             &codex_home,
             zsh_path.as_ref(),
             main_execve_wrapper_exe.as_ref(),
+            bash_path.as_ref(),
         );
         let effective_sandbox_policy = constrained_sandbox_policy.value.get().clone();
         let effective_file_system_sandbox_policy =
@@ -2578,6 +2597,7 @@ impl Config {
                 shell_environment_policy,
                 windows_sandbox_mode,
                 windows_sandbox_private_desktop,
+                windows_agent_shell,
             },
             approvals_reviewer,
             enforce_residency: enforce_residency.value,
@@ -2631,6 +2651,7 @@ impl Config {
             js_repl_node_path,
             js_repl_node_module_dirs,
             zsh_path,
+            bash_path,
 
             hide_agent_reasoning: cfg.hide_agent_reasoning.unwrap_or(false),
             show_raw_agent_reasoning: cfg
